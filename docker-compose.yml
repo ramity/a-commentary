@@ -1,0 +1,71 @@
+services:
+  # 1. MySQL 8.0 Database
+  db:
+    image: mysql:8.0
+    container_name: blog_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_secret_password
+      MYSQL_DATABASE: blog_db
+      MYSQL_USER: blog_user
+      MYSQL_PASSWORD: blog_secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "blog_user", "-pblog_secret"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - blog_net
+
+  # 2. C# .NET 8 Backend API (Compiled for High Performance)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: blog_backend
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5000
+      ConnectionStrings__DefaultConnection: "Server=db;Port=3306;Database=blog_db;User=blog_user;Password=blog_secret;"
+      StaticPostsPath: /var/www/static_blogs
+    volumes:
+      # Backend compiles static HTML directly into this shared volume
+      - static_posts:/var/www/static_blogs
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - blog_net
+
+  # 3. Nginx Gateway, Static Host & Reverse Proxy
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: blog_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      # Nginx reads static compiled post files directly from disk
+      - static_posts:/usr/share/nginx/html/posts:ro
+    depends_on:
+      - backend
+    networks:
+      - blog_net
+
+volumes:
+  mysql_data:
+    driver: local
+  static_posts:
+    driver: local
+
+networks:
+  blog_net:
+    driver: bridge

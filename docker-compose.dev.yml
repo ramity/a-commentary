@@ -1,0 +1,94 @@
+services:
+  # 1. MySQL 8.0 Database
+  db:
+    image: mysql:8.0
+    container_name: blog_mysql_dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_secret_password
+      MYSQL_DATABASE: blog_db
+      MYSQL_USER: blog_user
+      MYSQL_PASSWORD: blog_secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data_dev:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "blog_user", "-pblog_secret"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - blog_net_dev
+
+  # 2. C# .NET 8 Backend API (Development with SDK & Hot Reload)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: blog_backend_dev
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5000
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+      ConnectionStrings__DefaultConnection: "Server=db;Port=3306;Database=blog_db;User=blog_user;Password=blog_secret;"
+      StaticPostsPath: /var/www/static_blogs
+    volumes:
+      - ./backend:/app
+      - static_posts_dev:/var/www/static_blogs
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - blog_net_dev
+
+  # 3. Vue 3 SPA Frontend (Vite Dev Server with HMR)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: blog_frontend_dev
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_BACKEND_URL=http://backend:5000
+    depends_on:
+      - backend
+    networks:
+      - blog_net_dev
+
+  # 4. Nginx Reverse Proxy & Static File Server
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile.dev
+    container_name: blog_nginx_dev
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - static_posts_dev:/usr/share/nginx/html/posts:ro
+      - ./nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - blog_net_dev
+
+volumes:
+  mysql_data_dev:
+    driver: local
+  static_posts_dev:
+    driver: local
+
+networks:
+  blog_net_dev:
+    driver: bridge

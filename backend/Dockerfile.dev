@@ -1,0 +1,21 @@
+# ==========================================
+# Development Dockerfile for .NET 8 Backend
+# Uses full SDK with dotnet-watch hot reload
+# ==========================================
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0
+WORKDIR /app
+
+# Ensure static blog directory exists
+RUN mkdir -p /var/www/static_blogs && chmod 777 /var/www/static_blogs
+
+# Expose HTTP port
+EXPOSE 5000
+ENV ASPNETCORE_URLS=http://+:5000
+ENV ASPNETCORE_ENVIRONMENT=Development
+ENV DOTNET_USE_POLLING_FILE_WATCHER=true
+ENV StaticPostsPath=/var/www/static_blogs
+
+WORKDIR /app/src/BlogEngine.Api
+
+CMD ["dotnet", "watch", "run", "--urls", "http://0.0.0.0:5000"]

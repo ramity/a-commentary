@@ -1,0 +1,11 @@
+# ========================================================
+# Development Dockerfile for Nginx Gateway
+# Proxies to Vite dev server and C# backend
+# ========================================================
+
+FROM nginx:alpine
+COPY nginx/nginx.dev.conf /etc/nginx/nginx.conf
+RUN mkdir -p /usr/share/nginx/html/posts
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
